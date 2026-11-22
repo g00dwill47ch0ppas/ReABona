@@ -1,0 +1,142 @@
+CREATE TABLE dbo.Roles (
+  RoleID INT PRIMARY KEY,
+  RoleName NVARCHAR(30) NOT NULL UNIQUE
+);
+
+CREATE TABLE dbo.Statuses (
+  StatusID INT PRIMARY KEY,
+  StatusName NVARCHAR(30) NOT NULL UNIQUE,
+  SortOrder INT NOT NULL UNIQUE
+);
+
+CREATE TABLE dbo.Categories (
+  CategoryID INT IDENTITY(1,1) PRIMARY KEY,
+  CategoryName NVARCHAR(60) NOT NULL UNIQUE
+);
+
+CREATE TABLE dbo.Institutions (
+  InstitutionID INT IDENTITY(1,1) PRIMARY KEY,
+  InstitutionName NVARCHAR(150) NOT NULL,
+  InstitutionType NVARCHAR(30) NOT NULL,
+  District NVARCHAR(100) NULL,
+  ContactDetails NVARCHAR(250) NULL,
+  Active BIT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE dbo.Users (
+  UserID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  EntraObjectId NVARCHAR(64) NULL,
+  FullName NVARCHAR(150) NOT NULL,
+  Email NVARCHAR(200) NOT NULL UNIQUE,
+  Phone NVARCHAR(30) NULL,
+  RoleID INT NOT NULL REFERENCES dbo.Roles(RoleID),
+  InstitutionID INT NULL REFERENCES dbo.Institutions(InstitutionID),
+  AccountStatus NVARCHAR(20) NOT NULL DEFAULT 'Active',
+  CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE SEQUENCE dbo.ReportRefSeq AS BIGINT START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE dbo.Reports (
+  ReportID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  ReferenceNumber NVARCHAR(20) NOT NULL UNIQUE,
+  Title NVARCHAR(200) NOT NULL,
+  Description NVARCHAR(MAX) NOT NULL,
+  CategoryID INT NOT NULL REFERENCES dbo.Categories(CategoryID),
+  Location NVARCHAR(300) NOT NULL,
+  Latitude DECIMAL(9,6) NULL,
+  Longitude DECIMAL(9,6) NULL,
+  PhotoBlobName NVARCHAR(300) NULL,
+  SubmittedBy UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Users(UserID),
+  SubmittedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  CurrentStatusID INT NOT NULL REFERENCES dbo.Statuses(StatusID),
+  LeadInstitutionID INT NULL REFERENCES dbo.Institutions(InstitutionID),
+  CONSTRAINT CK_Reports_Latitude CHECK (Latitude IS NULL OR Latitude BETWEEN -90 AND 90),
+  CONSTRAINT CK_Reports_Longitude CHECK (Longitude IS NULL OR Longitude BETWEEN -180 AND 180)
+);
+
+CREATE TABLE dbo.CaseAssignments (
+  AssignmentID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  ReportID UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Reports(ReportID),
+  InstitutionID INT NOT NULL REFERENCES dbo.Institutions(InstitutionID),
+  AssignedOfficialID UNIQUEIDENTIFIER NULL REFERENCES dbo.Users(UserID),
+  Responsibility NVARCHAR(500) NULL,
+  AssignmentStatus NVARCHAR(30) NOT NULL DEFAULT 'Active',
+  AssignedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE dbo.CaseReferrals (
+  ReferralID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  ReportID UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Reports(ReportID),
+  FromInstitutionID INT NOT NULL REFERENCES dbo.Institutions(InstitutionID),
+  ToInstitutionID INT NOT NULL REFERENCES dbo.Institutions(InstitutionID),
+  Reason NVARCHAR(MAX) NOT NULL,
+  ReferredBy UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Users(UserID),
+  ReferredAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  ReferralStatus NVARCHAR(20) NOT NULL DEFAULT 'Pending',
+  CONSTRAINT CK_CaseReferrals_DifferentInstitutions CHECK (FromInstitutionID <> ToInstitutionID)
+);
+
+CREATE TABLE dbo.CaseUpdates (
+  UpdateID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  ReportID UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Reports(ReportID),
+  CreatedBy UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Users(UserID),
+  InstitutionID INT NULL REFERENCES dbo.Institutions(InstitutionID),
+  UpdateText NVARCHAR(MAX) NOT NULL,
+  Visibility NVARCHAR(20) NOT NULL DEFAULT 'Internal',
+  CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  CONSTRAINT CK_CaseUpdates_Visibility CHECK (Visibility IN ('Citizen', 'Internal'))
+);
+
+CREATE TABLE dbo.StatusHistory (
+  HistoryID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  ReportID UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Reports(ReportID),
+  PreviousStatusID INT NULL REFERENCES dbo.Statuses(StatusID),
+  NewStatusID INT NOT NULL REFERENCES dbo.Statuses(StatusID),
+  ChangedBy UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Users(UserID),
+  ChangedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+  Reason NVARCHAR(500) NULL
+);
+
+CREATE TABLE dbo.CitizenFeedback (
+  FeedbackID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  ReportID UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Reports(ReportID),
+  SubmittedBy UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Users(UserID),
+  FeedbackText NVARCHAR(MAX) NULL,
+  ResolutionConfirmed BIT NOT NULL,
+  SubmittedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE dbo.AuditLogs (
+  AuditID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  UserID UNIQUEIDENTIFIER NULL REFERENCES dbo.Users(UserID),
+  Action NVARCHAR(100) NOT NULL,
+  RecordType NVARCHAR(50) NOT NULL,
+  RecordID NVARCHAR(64) NULL,
+  Timestamp DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE dbo.RoutingRules (
+  RuleID INT IDENTITY(1,1) PRIMARY KEY,
+  CategoryID INT NOT NULL REFERENCES dbo.Categories(CategoryID),
+  District NVARCHAR(100) NULL,
+  InstitutionID INT NOT NULL REFERENCES dbo.Institutions(InstitutionID),
+  Active BIT NOT NULL DEFAULT 1
+);
+
+CREATE TABLE dbo.Notifications (
+  NotificationID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+  UserID UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.Users(UserID),
+  ReportID UNIQUEIDENTIFIER NULL REFERENCES dbo.Reports(ReportID),
+  Message NVARCHAR(300) NOT NULL,
+  IsRead BIT NOT NULL DEFAULT 0,
+  CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE INDEX IX_Reports_SubmittedBy_SubmittedAt ON dbo.Reports (SubmittedBy, SubmittedAt DESC);
+CREATE UNIQUE INDEX IX_Users_EntraObjectId ON dbo.Users (EntraObjectId) WHERE EntraObjectId IS NOT NULL;
+CREATE INDEX IX_Reports_LeadInstitution_Status ON dbo.Reports (LeadInstitutionID, CurrentStatusID);
+CREATE INDEX IX_CaseAssignments_Institution_Report ON dbo.CaseAssignments (InstitutionID, ReportID);
+CREATE INDEX IX_CaseReferrals_ToInstitution_Report ON dbo.CaseReferrals (ToInstitutionID, ReportID);
+CREATE INDEX IX_CaseUpdates_Report_Visibility_CreatedAt ON dbo.CaseUpdates (ReportID, Visibility, CreatedAt);
+CREATE INDEX IX_StatusHistory_Report_ChangedAt ON dbo.StatusHistory (ReportID, ChangedAt);

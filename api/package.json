@@ -1,0 +1,13 @@
+{
+  "name": "reabona-local-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "telegram:identify": "node telegram-identify.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}
